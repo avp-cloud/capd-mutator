@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eksa-capd-mutator
+  namespace: eksa-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eksa-capd-mutator-secret
+  namespace: eksa-system
+  annotations:
+    kubernetes.io/service-account.name: eksa-capd-mutator
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eksa-capd-mutator-role
+  namespace: eksa-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secret
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eksa-capd-mutator-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eksa-capd-mutator-role
+subjects:
+- kind: ServiceAccount
+  name: eksa-capd-mutator
+  namespace: eksa-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eksa-capd-mutator
+  namespace: eksa-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eksa-capd-mutator
+  template:
+    metadata:
+      labels:
+        app: eksa-capd-mutator
+    spec:
+      serviceAccountName: eksa-capd-mutator
+      containers:
+      - image: ghcr.io/avp-cloud/eksa-capd-mutator:main
+        imagePullPolicy: Always
+        name: eksa-capd-mutator
+        args:
+        - -host=0.0.0.0
+        - -namespace=eksa-system
+        - -suffix=-cfg
+        resources:
+          limits:
+            cpu: 50m
+            memory: 64Mi
+          requests:
+            cpu: 50m
+            memory: 32Mi

@@ -1,18 +1,20 @@
 FROM golang:1.19 as gobuild
 
-# Set the Current Working Directory inside the container
-WORKDIR $GOPATH/src/github.com/avp-cloud/eksa-capd-mutator
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+RUN go mod download
 
-# Copy everything from the current directory to the PWD (Present Working Directory) inside the container
-COPY . .
+# Copy the go source
+COPY main.go main.go
 
-# Download all the dependencies
-RUN go get -d -v ./...
+# Build
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /eksa-capd-mutator main.go
 
-# build the package
-RUN go build -o /eksa-capd-mutator
-
-FROM gcr.io/distroless/static-debian11
+FROM alpine
 
 COPY --from=gobuild /eksa-capd-mutator /eksa-capd-mutator
 # Run the executable
