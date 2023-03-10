@@ -36,6 +36,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: eksa-capd-mutator-rolebinding
+  namespace: eksa-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -65,6 +66,8 @@ spec:
       - image: ghcr.io/avp-cloud/eksa-capd-mutator:main
         imagePullPolicy: Always
         name: eksa-capd-mutator
+        command:
+        - /eksa-capd-mutator
         args:
         - -host=0.0.0.0
         - -namespace=eksa-system
