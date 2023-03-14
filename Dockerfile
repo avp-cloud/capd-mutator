@@ -12,10 +12,10 @@ RUN go mod download
 COPY main.go main.go
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /eksa-capd-mutator main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /capd-mutator main.go
 
 FROM alpine
 
-COPY --from=gobuild /eksa-capd-mutator /eksa-capd-mutator
+COPY --from=gobuild /capd-mutator /capd-mutator
 # Run the executable
-CMD ["/eksa-capd-mutator"]
+CMD ["/capd-mutator"]

@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: capd-mutator
+  namespace: default
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: capd-mutator-secret
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: capd-mutator
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: capd-mutator-role
+  namespace: default
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secret
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: capd-mutator-rolebinding
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: capd-mutator-role
+subjects:
+- kind: ServiceAccount
+  name: capd-mutator
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: capd-mutator
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: capd-mutator
+  template:
+    metadata:
+      labels:
+        app: capd-mutator
+    spec:
+      serviceAccountName: capd-mutator
+      containers:
+      - image: ghcr.io/avp-cloud/capd-mutator:main
+        imagePullPolicy: Always
+        name: capd-mutator
+        command:
+        - /capd-mutator
+        args:
+        - -host=0.0.0.0
+        - -namespace=default
+        - -suffix=-cfg
+        - -disableTlsVerify=false
+        resources:
+          limits:
+            cpu: 50m
+            memory: 64Mi
+          requests:
+            cpu: 50m
+            memory: 32Mi

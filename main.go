@@ -20,11 +20,12 @@ import (
 )
 
 var (
-	kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	host       = flag.String("host", "", "docker host ip")
-	namespace  = flag.String("namespace", "", "namespace to store the mutated kubeconfig")
-	suffix     = flag.String("suffix", "", "suffix to be added to cluster name for the mutated kubeconfig secret")
-	dockerPort = flag.String("docker-port", "2375", "docker api port")
+	kubeconfig       = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	host             = flag.String("host", "", "docker host ip")
+	namespace        = flag.String("namespace", "", "namespace to store the mutated kubeconfig")
+	suffix           = flag.String("suffix", "", "suffix to be added to cluster name for the mutated kubeconfig secret")
+	disableTlsVerify = flag.Bool("disableTlsVerify", true, "disable tls verification in mutated kubeconfig")
+	dockerPort       = flag.String("docker-port", "2375", "docker api port")
 )
 
 func main() {
@@ -79,8 +80,10 @@ func main() {
 					continue
 				}
 				kc.Clusters[0].Cluster.Server = "https://" + *host + ":" + p
-				kc.Clusters[0].Cluster.CertificateAuthorityData = nil
-				kc.Clusters[0].Cluster.InsecureSkipTLSVerify = true
+				if *disableTlsVerify {
+					kc.Clusters[0].Cluster.CertificateAuthorityData = nil
+					kc.Clusters[0].Cluster.InsecureSkipTLSVerify = true
+				}
 				kcBytes, _ := yaml.Marshal(kc)
 				newSec := &v1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
