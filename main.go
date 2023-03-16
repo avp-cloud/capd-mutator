@@ -89,7 +89,7 @@ func main() {
 
 				var newSec *v1.Secret
 				newSec, err = clientset.CoreV1().Secrets(*namespace).Get(context.Background(), cluName+*suffix, metav1.GetOptions{})
-				if err != nil {
+				if err == nil {
 					// already exists
 					newSec.Data = map[string][]byte{"value": kcBytes}
 					_, err = clientset.CoreV1().Secrets(*namespace).Update(context.Background(), newSec, metav1.UpdateOptions{})
