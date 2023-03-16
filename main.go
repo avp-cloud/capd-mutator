@@ -12,6 +12,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/kubernetes-client/go/kubernetes/config/api"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -22,7 +23,7 @@ import (
 var (
 	kubeconfig       = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 	host             = flag.String("host", "", "docker host ip")
-	namespace        = flag.String("namespace", "", "namespace to store the mutated kubeconfig")
+	namespace        = flag.String("namespace", "", "namespace of deployment")
 	suffix           = flag.String("suffix", "", "suffix to be added to cluster name for the mutated kubeconfig secret")
 	disableTlsVerify = flag.Bool("disableTlsVerify", true, "disable tls verification in mutated kubeconfig")
 	dockerPort       = flag.String("docker-port", "2375", "docker api port")
@@ -56,7 +57,7 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	watcher, err := clientset.CoreV1().Secrets("eksa-system").Watch(context.Background(), metav1.ListOptions{})
+	watcher, err := clientset.CoreV1().Secrets(*namespace).Watch(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func main() {
 		if strings.Contains(sec.Name, "-kubeconfig") {
 			cluName := strings.ReplaceAll(sec.Name, "-kubeconfig", "")
 			switch event.Type {
-			case watch.Added:
+			case watch.Added, watch.Modified:
 				fmt.Printf("Detected new kubeconfig secret %s\n", sec.Name)
 				p, err := getContainerHostPort(dc, cluName+"-lb")
 				if err != nil {
@@ -85,18 +86,35 @@ func main() {
 					kc.Clusters[0].Cluster.InsecureSkipTLSVerify = true
 				}
 				kcBytes, _ := yaml.Marshal(kc)
-				newSec := &v1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      cluName + *suffix,
-						Namespace: *namespace,
-					},
-					Data: map[string][]byte{"value": kcBytes},
-				}
-				_, err = clientset.CoreV1().Secrets(*namespace).Create(context.Background(), newSec, metav1.CreateOptions{})
+
+				var newSec *v1.Secret
+				newSec, err = clientset.CoreV1().Secrets(*namespace).Get(context.Background(), cluName+*suffix, metav1.GetOptions{})
 				if err != nil {
-					fmt.Printf("failed to mutate kubeconfig secret err:%v\n", err.Error())
+					// already exists
+					newSec.Data = map[string][]byte{"value": kcBytes}
+					_, err = clientset.CoreV1().Secrets(*namespace).Update(context.Background(), newSec, metav1.UpdateOptions{})
+					if err != nil {
+						fmt.Printf("failed to mutate kubeconfig secret err:%v\n", err.Error())
+					} else {
+						fmt.Printf("Mutated updated kubeconfig secret %s\n", cluName+*suffix)
+					}
+				} else if apierrors.IsNotFound(err) {
+					newSec = &v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      cluName + *suffix,
+							Namespace: *namespace,
+						},
+						Data: map[string][]byte{"value": kcBytes},
+					}
+
+					_, err = clientset.CoreV1().Secrets(*namespace).Create(context.Background(), newSec, metav1.CreateOptions{})
+					if err != nil {
+						fmt.Printf("failed to mutate kubeconfig secret err:%v\n", err.Error())
+					} else {
+						fmt.Printf("Mutated new kubeconfig secret %s\n", cluName+*suffix)
+					}
 				} else {
-					fmt.Printf("Mutated new kubeconfig secret %s\n", cluName+*suffix)
+					fmt.Printf("failed to mutate kubeconfig secret err:%v\n", err.Error())
 				}
 			case watch.Deleted:
 				fmt.Printf("Detected deleted kubeconfig secret %s\n", sec.Name)
